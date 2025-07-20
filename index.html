@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Telegram贴图格式转换工具 V4</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      background: #f4f4f4;
+      text-align: center;
+    }
+    .btn {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .preview {
+      max-width: 100%;
+      margin: 10px;
+      border: 1px solid #ccc;
+    }
+    .section {
+      background: #fff;
+      padding: 20px;
+      margin-bottom: 40px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    #guide {
+      margin-top: 20px;
+      border-top: 1px dashed #ccc;
+      padding-top: 15px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>📦 Telegram贴图格式转换工具 V4</h2>
+
+  <div class="section">
+    <h3>🖼 批量图片转 WebP 贴图</h3>
+    <input type="file" id="imgUpload" accept="image/*" multiple class="btn">
+    <br>
+    <button id="zipDownload" class="btn">⬇️ 批量下载 WebP（ZIP）</button>
+    <div id="imgPreviews"></div>
+  </div>
+
+  <div class="section">
+    <h3>🎬 MP4转视频贴图（WebM）</h3>
+    <input type="file" id="videoUpload" accept="video/mp4" class="btn">
+    <p style="color:gray;">* 自动裁剪3秒，输出为512×512的 VP9 格式 WebM</p>
+    <div id="videoResult"></div>
+  </div>
+
+  <div id="guide" class="section">
+    <h3>🚀 上传贴图到你的 Telegram 集合</h3>
+    <p>👉 你可以点击下方按钮跳转到 Telegram 官方贴图创建页面，上传你的贴图文件。</p>
+    <a href="https://t.me/addstickers" target="_blank" class="btn">✈️ 打开 Telegram 上传贴图页面</a>
+    <p style="color:gray; font-size:14px; margin-top:10px;">
+      上传时每张贴图需要绑定一个 Emoji 表情，贴图大小需 <strong>&lt;512KB</strong>。
+    </p>
+    <p>建议贴图集命名为：<code>yourname_custom_stickers</code></p>
+  </div>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: false });
+
+    const imgUpload = document.getElementById('imgUpload');
+    const zipDownload = document.getElementById('zipDownload');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const imgPreviews = document.getElementById('imgPreviews');
+    const guide = document.getElementById('guide');
+    let processedImages = [];
+
+    imgUpload.addEventListener('change', function (e) {
+      processedImages = [];
+      imgPreviews.innerHTML = '';
+      guide.style.display = 'none';
+      const files = Array.from(e.target.files);
+      files.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = function (evt) {
+          const img = new Image();
+          img.onload = function () {
+            let { width, height } = img;
+            const maxSize = 512;
+            if (width > height) {
+              if (width > maxSize) {
+                height = height * (maxSize / width);
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width = width * (maxSize / height);
+                height = maxSize;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.clearRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(blob => {
+              processedImages.push({ name: file.name.replace(/\.[^/.]+$/, "") + ".webp", blob });
+              const previewImg = document.createElement('img');
+              previewImg.src = URL.createObjectURL(blob);
+              previewImg.className = 'preview';
+              imgPreviews.appendChild(previewImg);
+            }, 'image/webp', 0.95);
+          };
+          img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    zipDownload.addEventListener('click', () => {
+      if (!processedImages.length) {
+        alert("请先上传并处理图片！");
+        return;
+      }
+      const zip = new JSZip();
+      processedImages.forEach(file => {
+        zip.file(file.name, file.blob);
+      });
+      zip.generateAsync({type:"blob"}).then(content => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = "telegram_stickers.zip";
+        link.click();
+        guide.style.display = 'block';
+      });
+    });
+
+    document.getElementById('videoUpload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const resultArea = document.getElementById('videoResult');
+      resultArea.innerHTML = "⏳ 正在加载 FFmpeg，请稍候...";
+      if (!ffmpeg.isLoaded()) await ffmpeg.load();
+
+      resultArea.innerHTML = "🎬 正在处理视频...";
+
+      const inputName = 'input.mp4';
+      const outputName = 'output.webm';
+
+      ffmpeg.FS('writeFile', inputName, await fetchFile(file));
+
+      await ffmpeg.run(
+        '-i', inputName,
+        '-ss', '0',
+        '-t', '3',
+        '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black',
+        '-c:v', 'libvpx-vp9',
+        '-b:v', '256K',
+        '-an',
+        outputName
+      );
+
+      const data = ffmpeg.FS('readFile', outputName);
+      const videoBlob = new Blob([data.buffer], { type: 'video/webm' });
+      const url = URL.createObjectURL(videoBlob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'telegram_sticker.webm';
+      link.textContent = '⬇️ 下载 WebM 视频贴图';
+      link.className = 'btn';
+
+      const video = document.createElement('video');
+      video.src = url;
+      video.controls = true;
+      video.width = 256;
+      video.style.marginTop = '10px';
+
+      resultArea.innerHTML = '';
+      resultArea.appendChild(video);
+      resultArea.appendChild(document.createElement('br'));
+      resultArea.appendChild(link);
+      guide.style.display = 'block';
+    });
+  </script>
+</body>
+</html>
