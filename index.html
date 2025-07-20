@@ -3,19 +3,19 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>Telegram贴图格式转换工具 V7.2</title>
+  <title>Telegram贴图格式转换工具 V7.3</title>
   <style>
     body { font-family: Arial; background: #f4f4f4; padding: 20px; text-align: center; }
     .section { background: #fff; margin: 20px auto; padding: 20px; border-radius: 8px; max-width: 720px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
     .btn { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
-    .file-item { text-align: left; margin: 10px 0; padding: 8px; background: #f9f9f9; border-radius: 6px; font-size: 14px; }
+    .file-item { text-align: left; margin: 10px 0; padding: 10px; background: #f9f9f9; border-radius: 6px; font-size: 14px; }
     .progress-container { height: 10px; background: #ddd; border-radius: 5px; margin-top: 5px; overflow: hidden; }
     .progress-bar { height: 100%; background: #4caf50; width: 0%; transition: width 0.4s; }
-    video { margin-top: 10px; max-width: 100%; }
+    .download-link { margin-top: 5px; display: inline-block; }
   </style>
 </head>
 <body>
-  <h2>Telegram贴图格式转换工具 V7.2</h2>
+  <h2>Telegram贴图格式转换工具 V7.3</h2>
 
   <div class="section">
     <h3>🖼 批量图片转 WebP</h3>
@@ -24,19 +24,8 @@
     <button class="btn" id="zipDownload" disabled>⬇️ 下载所有贴图</button>
   </div>
 
-  <div class="section">
-    <h3>🎬 视频转 WebM 贴图</h3>
-    <input type="file" id="videoUpload" accept="video/mp4" class="btn">
-    <div id="videoStatus"></div>
-    <div id="videoResult"></div>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js"></script>
   <script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: false });
-
     const imgUpload = document.getElementById('imgUpload');
     const fileList = document.getElementById('fileList');
     const zipDownload = document.getElementById('zipDownload');
@@ -55,21 +44,22 @@
         const file = files[i];
         const item = document.createElement('div');
         item.className = 'file-item';
+        const status = document.createElement('div');
+        status.className = 'status';
+        status.innerText = '准备处理...';
+
         const progress = document.createElement('div');
         progress.className = 'progress-container';
         const bar = document.createElement('div');
         bar.className = 'progress-bar';
         progress.appendChild(bar);
-        const status = document.createElement('div');
-        status.className = 'status';
-        status.innerText = '处理中...';
 
         item.innerHTML = `<strong>${file.name}</strong>`;
         item.appendChild(status);
         item.appendChild(progress);
         fileList.appendChild(item);
 
-        await new Promise(resolve => setTimeout(resolve, 100)); // 防止阻塞 UI
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         const blob = await new Promise(resolve => {
           const reader = new FileReader();
@@ -91,8 +81,17 @@
         });
 
         bar.style.width = '100%';
-        status.innerText = '✅ 完成';
-        processedImages.push({ name: file.name.replace(/\.[^/.]+$/, "") + ".webp", blob });
+        status.innerText = '✅ 转换完成';
+
+        const fileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.className = 'download-link';
+        link.innerText = '⬇️ 下载该图';
+
+        item.appendChild(link);
+        processedImages.push({ name: fileName, blob });
       }
 
       if (processedImages.length === totalImages) {
@@ -110,41 +109,6 @@
         link.click();
       });
     };
-
-    // 视频模块
-    const videoUpload = document.getElementById('videoUpload');
-    const videoStatus = document.getElementById('videoStatus');
-    const videoResult = document.getElementById('videoResult');
-
-    videoUpload.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      videoStatus.innerText = "⏳ 正在加载FFmpeg...";
-      if (!ffmpeg.isLoaded()) await ffmpeg.load();
-      videoStatus.innerText = "🎬 正在处理视频...";
-
-      const inputName = 'input.mp4';
-      const outputName = 'output.webm';
-
-      ffmpeg.FS('writeFile', inputName, await fetchFile(file));
-      await ffmpeg.run(
-        '-i', inputName,
-        '-ss', '0',
-        '-t', '3',
-        '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black',
-        '-c:v', 'libvpx-vp9',
-        '-b:v', '256K',
-        '-an',
-        outputName
-      );
-
-      const data = ffmpeg.FS('readFile', outputName);
-      const blob = new Blob([data.buffer], { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-
-      videoStatus.innerText = "✅ 视频处理完成";
-      videoResult.innerHTML = `<video controls src="${url}"></video><br><a class="btn" href="${url}" download="telegram_sticker.webm">⬇️ 下载视频贴图</a>`;
-    });
   </script>
 </body>
 </html>
