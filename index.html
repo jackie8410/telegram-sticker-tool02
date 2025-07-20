@@ -3,7 +3,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>Telegram贴图格式转换工具 V7.1</title>
+  <title>Telegram贴图格式转换工具 V7.2</title>
   <style>
     body { font-family: Arial; background: #f4f4f4; padding: 20px; text-align: center; }
     .section { background: #fff; margin: 20px auto; padding: 20px; border-radius: 8px; max-width: 720px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <h2>Telegram贴图格式转换工具 V7.1</h2>
+  <h2>Telegram贴图格式转换工具 V7.2</h2>
 
   <div class="section">
     <h3>🖼 批量图片转 WebP</h3>
@@ -60,11 +60,16 @@
         const bar = document.createElement('div');
         bar.className = 'progress-bar';
         progress.appendChild(bar);
-        item.innerHTML = `<strong>${file.name}</strong><div class="status">准备中...</div>`;
+        const status = document.createElement('div');
+        status.className = 'status';
+        status.innerText = '处理中...';
+
+        item.innerHTML = `<strong>${file.name}</strong>`;
+        item.appendChild(status);
         item.appendChild(progress);
         fileList.appendChild(item);
 
-        await new Promise(resolve => setTimeout(resolve, 100)); // 短暂延迟以防阻塞 UI
+        await new Promise(resolve => setTimeout(resolve, 100)); // 防止阻塞 UI
 
         const blob = await new Promise(resolve => {
           const reader = new FileReader();
@@ -86,7 +91,7 @@
         });
 
         bar.style.width = '100%';
-        item.querySelector('.status').innerText = '✅ 完成';
+        status.innerText = '✅ 完成';
         processedImages.push({ name: file.name.replace(/\.[^/.]+$/, "") + ".webp", blob });
       }
 
